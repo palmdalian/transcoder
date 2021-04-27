@@ -15,7 +15,6 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 )
 
 const (
@@ -32,11 +31,11 @@ const (
 type JobParams map[string]string
 
 type Job struct {
-	ID            uuid.UUID      `json:"id" gorm:"type:uuid;index"`
-	Status        string         `json:"status" gorm:"index"`
-	Preset        *Preset        `json:"preset" gorm:"-"`
-	Params        JobParams      `json:"params" gorm:"type:jsonb"`
-	CommandOutput pq.StringArray `json:"commandOutput" gorm:"type:text[]"`
+	ID            uuid.UUID `json:"id" gorm:"type:uuid;index"`
+	Status        string    `json:"status" gorm:"index"`
+	Preset        *Preset   `json:"preset" gorm:"-"`
+	Params        JobParams `json:"params" gorm:"type:jsonb"`
+	CommandOutput string    `json:"commandOutput" gorm:"type:text"`
 
 	info *info
 	cmd  *exec.Cmd
@@ -78,7 +77,7 @@ func (job *Job) Run() error {
 	}
 
 	defer func() {
-		job.CommandOutput = job.Output()
+		job.CommandOutput = strings.Join(job.Output(), "\n")
 	}()
 
 	stdReader, err := job.cmd.StdoutPipe()
