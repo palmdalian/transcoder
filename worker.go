@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/adjust/rmq/v4"
 	"github.com/go-redis/redis/v8"
@@ -112,22 +111,20 @@ func (worker *Worker) commandReader(ctx context.Context, job *Job) {
 				log.Println(err)
 			}
 		case JobCmdKill:
-			if job.cmd != nil && job.cmd.Process != nil {
-				log.Printf("Killing %v", job.ID)
-				stat := &JobStatus{Status: "killed"}
-				if err := job.cmd.Process.Signal(os.Kill); err != nil {
-					stat.Status = job.Status
-					stat.Message = fmt.Sprintf("Could not kill %v", err)
-				}
-				b, err := json.Marshal(stat)
-				if err != nil {
-					log.Println(err)
-					return
-				}
-				send := worker.redisClient.Publish(ctx, InfoChannel(job.ID), b)
-				if err := send.Err(); err != nil {
-					log.Println(err)
-				}
+			stat := &JobStatus{Status: "killed"}
+			log.Printf("Killing %v", job.ID)
+			if err := job.Kill(); err != nil {
+				stat.Status = job.Status
+				stat.Message = fmt.Sprintf("Could not kill %v", err)
+			}
+			b, err := json.Marshal(stat)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			send := worker.redisClient.Publish(ctx, InfoChannel(job.ID), b)
+			if err := send.Err(); err != nil {
+				log.Println(err)
 			}
 		}
 	}

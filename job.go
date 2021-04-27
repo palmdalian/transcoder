@@ -108,7 +108,7 @@ func (job *Job) Run() error {
 }
 
 func (job *Job) Kill() error {
-	if job.cmd != nil && job.cmd.Process != nil {
+	if job.cmd == nil || job.cmd.Process == nil {
 		return fmt.Errorf("no job to kill %v", job.cmd)
 	}
 	return job.cmd.Process.Signal(os.Kill)
