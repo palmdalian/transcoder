@@ -37,7 +37,7 @@ A NewDirector in the queue package creates a worker pool and subscribes to a rmq
 ## Creating a standalone worker pool
 If you don't want to use an rmq.Queue, you can instead create your own worker pool.
 ```
-    // Queue to submit new jobs
+        // Queue to submit new jobs
 	jobQueue := make(chan *transcoder.Job, 100)
 
 	// Chan for status updates from workers (alternatively, can pass nil)
@@ -69,7 +69,7 @@ If you don't want to use an rmq.Queue, you can instead create your own worker po
 Example servers, workers, and cli in /cmd
 ### Standalone http server
 `cmd/server` Listen for incoming JobSubmission requests and submit them to the worker pool. Handles running, killing, and getting job status.
-### CLI with pool
+### CLI
 `cmd/cli` Serially run many jobs directly using a single Preset. flag args are used for JobParams input and output.
 ### CLI with pool
 `cmd/cli_pool` Batch many ffmpeg jobs using a single Preset. flag args are used for JobParams input and output.
