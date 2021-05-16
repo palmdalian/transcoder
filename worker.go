@@ -37,7 +37,7 @@ func (worker *Worker) start() {
 		worker.sendUpdate(&JobStatus{Job: job, Status: job.Status})
 
 		log.Printf("%s got job %s", worker.Name, job.ID)
-		if err := worker.Submit(job); err != nil {
+		if err := worker.submit(job); err != nil {
 			worker.reject(job, fmt.Sprintf("submitting job %v", err))
 			continue
 		}
@@ -47,8 +47,7 @@ func (worker *Worker) start() {
 	}
 }
 
-// Submit prepare and run job command
-func (worker *Worker) Submit(job *Job) error {
+func (worker *Worker) submit(job *Job) error {
 	if err := job.Run(); err != nil {
 		return err
 	}

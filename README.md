@@ -43,7 +43,7 @@ If you don't want to use an rmq.Queue, you can instead create your own worker po
 	// Chan for status updates from workers (alternatively, can pass nil)
 	jobUpdatesChan := make(chan *transcoder.JobStatus, 100)
 	for i := 0; i < WorkerNum; i++ {
-		worker := transcoder.NewWorker(jobQueue, jobUpdatesChan)
+		transcoder.NewWorker(jobQueue, jobUpdatesChan)
 	}
 
 	// Read updates
@@ -60,7 +60,7 @@ If you don't want to use an rmq.Queue, you can instead create your own worker po
 	jobQueue <- newJob
 
 	// Block until job finishes
-	job.Wait()
+	newJob.Wait()
 
 ```
 

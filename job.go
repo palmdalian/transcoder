@@ -153,6 +153,7 @@ func (job *Job) Reset() {
 	job.info = &info{}
 }
 
+// setDone - close done channel if exists
 func setDone(job *Job) {
 	job.mu.Lock()
 	defer job.mu.Unlock()
@@ -279,6 +280,7 @@ func (job *Job) setCurrentTime(current float64) {
 	job.info.CurrentTime = current
 }
 
+// Info - return all collected info from exec.Cmd process
 func (job *Job) Info() string {
 	job.mu.RLock()
 	defer job.mu.RUnlock()
@@ -289,6 +291,7 @@ func (job *Job) Info() string {
 	return string(b)
 }
 
+// Output - return any messages collected from stdin
 func (job *Job) Output() []string {
 	job.mu.RLock()
 	o := job.info.Output
@@ -296,6 +299,7 @@ func (job *Job) Output() []string {
 	return o
 }
 
+// ErrOutput - return any messages collected from stderr
 func (job *Job) ErrOutput() []string {
 	job.mu.RLock()
 	e := job.info.ErrOutput
@@ -303,6 +307,7 @@ func (job *Job) ErrOutput() []string {
 	return e
 }
 
+// Scan - allow retrieving of jsonb -> JobParams
 func (jp *JobParams) Scan(value interface{}) error {
 	bytes, ok := value.([]byte)
 	if !ok {
@@ -315,6 +320,7 @@ func (jp *JobParams) Scan(value interface{}) error {
 	return err
 }
 
+// Value - allow saving JobParams as jsonb
 func (jp JobParams) Value() (driver.Value, error) {
 	if len(jp) == 0 {
 		return nil, nil
