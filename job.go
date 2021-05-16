@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"os/exec"
 	"regexp"
@@ -36,7 +35,7 @@ type Job struct {
 	CreatedAt     time.Time `json:"createdAt"`
 	Status        string    `json:"status" gorm:"index"`
 	PresetID      uuid.UUID `json:"presetId"`
-	Preset        *Preset   `json:"preset" gorm:"-"`
+	Preset        *Preset   `json:"preset,omitempty" gorm:"-"`
 	Params        JobParams `json:"params" gorm:"type:jsonb"`
 	CommandOutput string    `json:"commandOutput" gorm:"type:text"`
 
@@ -62,10 +61,10 @@ type info struct {
 	done chan struct{}
 	err  error
 
-	TotalFrames  int64    `json:"totalFrames"`
-	CurrentFrame int64    `json:"currentFrame"`
-	Output       []string `json:"output"`
-	ErrOutput    []string `json:"errOutput"`
+	CurrentTime   float64  `json:"currentTime"`
+	TotalDuration float64  `json:"totalDuration"`
+	Output        []string `json:"output"`
+	ErrOutput     []string `json:"errOutput"`
 }
 
 type JobStatus struct {
@@ -194,40 +193,39 @@ func (job *Job) Kill() error {
 	return nil
 }
 
-var frameReg = regexp.MustCompile(`^frame=(\d+)$`)
+var microsecondReg = regexp.MustCompile(`^out_time_ms=(\d+)$`)
 
 func (job *Job) readStdOutput(scanner *bufio.Scanner) {
 	for scanner.Scan() {
 		text := scanner.Text()
 		job.appendOutput(text)
-		vals := frameReg.FindStringSubmatch(text)
+		vals := microsecondReg.FindStringSubmatch(text)
 		if len(vals) < 2 {
 			continue
 		}
-		if frame, err := strconv.ParseInt(vals[1], 10, 64); err == nil {
-			job.setFrame(frame)
+		if ms, err := strconv.ParseInt(vals[1], 10, 64); err == nil {
+			job.setCurrentTime(float64(ms) / 1000000)
 		}
 	}
 }
 
-var durationReg = regexp.MustCompile(`^\s*Duration:\s*([0-9:.]+),`)
+var timecodeReg = regexp.MustCompile(`^\s*Duration:\s*([0-9:.]+),`)
 
 func (job *Job) readErrOutput(scanner *bufio.Scanner) {
 	for scanner.Scan() {
 		text := scanner.Text()
 		job.appendErrOutput(text)
-		vals := durationReg.FindStringSubmatch(text)
+		vals := timecodeReg.FindStringSubmatch(text)
 		if len(vals) < 2 {
 			continue
 		}
-		frames := parseFramesFromTimecode(vals[1])
-		job.setTotalFrames(frames)
+		dur := parseDurationFromTimecode(vals[1])
+		job.setTotalDuration(dur)
 	}
 }
 
-// parseFramesFromTimecode - take ffmpeg duration timecode and convert to frames
-// assumes 29.97 framerate :(
-func parseFramesFromTimecode(timecode string) int64 {
+// parseDurationFromTimecode - take ffmpeg duration timecode and convert to seconds
+func parseDurationFromTimecode(timecode string) float64 {
 	// 00:02:15.77
 	split := strings.Split(timecode, ":")
 	if len(split) != 3 {
@@ -247,8 +245,7 @@ func parseFramesFromTimecode(timecode string) int64 {
 	}
 
 	totalSeconds := (hours * 60 * 60) + (minutes * 60) + seconds
-	frames := int64(math.Round(totalSeconds * 30000 / 1001))
-	return frames
+	return totalSeconds
 }
 
 func (job *Job) appendOutput(output string) {
@@ -263,16 +260,16 @@ func (job *Job) appendErrOutput(output string) {
 	job.info.ErrOutput = append(job.info.ErrOutput, output)
 }
 
-func (job *Job) setTotalFrames(frames int64) {
+func (job *Job) setTotalDuration(duration float64) {
 	job.mu.Lock()
 	defer job.mu.Unlock()
-	job.info.TotalFrames = frames
+	job.info.TotalDuration = duration
 }
 
-func (job *Job) setFrame(frame int64) {
+func (job *Job) setCurrentTime(current float64) {
 	job.mu.Lock()
 	defer job.mu.Unlock()
-	job.info.CurrentFrame = frame
+	job.info.CurrentTime = current
 }
 
 func (job *Job) Info() string {
