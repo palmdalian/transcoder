@@ -3,11 +3,13 @@ package transcoder
 import "github.com/google/uuid"
 
 type PresetGroup struct {
+	ID      uuid.UUID `json:"id"`
 	Presets []*Preset
 }
 
 // Preset - A single command + args to exec
 type Preset struct {
+	ID            uuid.UUID  `json:"id"`
 	Description   string     `json:"description"`
 	Path          string     `json:"path"` // Executable path
 	PresetGroupID *uuid.UUID `json:"presetGroupId,omitempty"`

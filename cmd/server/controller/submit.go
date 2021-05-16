@@ -17,21 +17,25 @@ type JobSubmission struct {
 // Realistically, these should be saved in the DB
 var presets = map[uuid.UUID]*transcoder.Preset{
 	uuid.MustParse("da303a92-d681-4be5-8880-668377edf37c"): {
+		ID:          uuid.MustParse("da303a92-d681-4be5-8880-668377edf37c"),
 		Description: "Convert using ffmpeg defaults",
 		Path:        "ffmpeg",
 		Args:        []string{"-y", "-progress", "-", "-nostats", "-i", "{{input}}", "{{output}}"},
 	},
 	uuid.MustParse("f12e777d-4666-484c-99b9-fd0ec24c9f3e"): {
+		ID:          uuid.MustParse("f12e777d-4666-484c-99b9-fd0ec24c9f3e"),
 		Description: "Stream copy to mp4",
 		Path:        "ffmpeg",
 		Args:        []string{"-y", "-progress", "-", "-nostats", "-i", "{{input}}", "-c", "copy", "{{output}}.mp4"},
 	},
 	uuid.MustParse("8826501e-bfa3-4743-b4d1-305dd1a40c72"): {
+		ID:          uuid.MustParse("8826501e-bfa3-4743-b4d1-305dd1a40c72"),
 		Description: "Audio only copy",
 		Path:        "ffmpeg",
 		Args:        []string{"-y", "-progress", "-", "-nostats", "-i", "{{input}}", "-c:a", "copy", "-vn", "{{output}}"},
 	},
 	uuid.MustParse("2f7b5825-4ff9-4407-bf6e-20b0d2125d01"): {
+		ID:          uuid.MustParse("2f7b5825-4ff9-4407-bf6e-20b0d2125d01"),
 		Description: "Video only copy",
 		Path:        "ffmpeg",
 		Args:        []string{"-y", "-progress", "-", "-nostats", "-i", "{{input}}", "-c:v", "copy", "-an", "{{output}}"},
@@ -67,13 +71,7 @@ func (c *Controller) SubmitPresetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	job := &transcoder.Job{
-		ID:     uuid.New(),
-		Status: transcoder.JobStatusSubmitted,
-		Preset: preset,
-		Params: submission.Params,
-	}
-
+	job := transcoder.NewJob(preset, submission.Params)
 	if err = c.sendToQueue(job); err != nil {
 		writeErrResponse(w, http.StatusInternalServerError, fmt.Sprintf("submitting to queue %v", err))
 		return
@@ -104,12 +102,7 @@ func (c *Controller) SubmitPresetGroupJob(w http.ResponseWriter, r *http.Request
 
 	jobs := make([]*transcoder.Job, len(presetGroup.Presets))
 	for i, preset := range presetGroup.Presets {
-		job := &transcoder.Job{
-			ID:     uuid.New(),
-			Status: transcoder.JobStatusSubmitted,
-			Preset: preset,
-			Params: submission.Params,
-		}
+		job := transcoder.NewJob(preset, submission.Params)
 		jobs[i] = job
 		if err := c.sendToQueue(job); err != nil {
 			writeErrResponse(w, http.StatusInternalServerError, fmt.Sprintf("submitting to queue %v", err))

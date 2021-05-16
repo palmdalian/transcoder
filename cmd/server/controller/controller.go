@@ -1,50 +1,32 @@
 package controller
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
-	"github.com/adjust/rmq/v4"
-	"github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
 	"github.com/palmdalian/transcoder"
-	"gorm.io/gorm"
+
+	"github.com/google/uuid"
 )
 
 type Controller struct {
-	db             *gorm.DB
-	redisClient    redis.UniversalClient
-	taskQueue      rmq.Queue
-	JobUpdatesChan chan *transcoder.Job
+	mutex          *sync.Mutex
+	jobs           map[uuid.UUID]*transcoder.Job
+	jobChan        chan *transcoder.Job
+	jobUpdatesChan chan *transcoder.JobStatus
 }
 
-func NewController(db *gorm.DB, redisClient redis.UniversalClient, taskQueue rmq.Queue) *Controller {
-	return &Controller{
-		db:             db,
-		redisClient:    redisClient,
-		taskQueue:      taskQueue,
-		JobUpdatesChan: make(chan *transcoder.Job, 10),
+func NewController(jobChan chan *transcoder.Job, jobUpdatesChan chan *transcoder.JobStatus) *Controller {
+	controller := &Controller{
+		jobChan:        jobChan,
+		jobUpdatesChan: jobUpdatesChan,
+		mutex:          &sync.Mutex{},
+		jobs:           make(map[uuid.UUID]*transcoder.Job),
 	}
-}
-
-func (c *Controller) SaveWorkerJobUpdates() {
-	for job := range c.JobUpdatesChan {
-		if job.ID == uuid.Nil {
-			continue
-		}
-		err := c.db.Save(job).Error
-		if err != nil {
-			log.Printf("Err saving jobID %v: %v", job.ID, err)
-		}
-	}
-}
-
-func (c *Controller) DestroyQueue(w http.ResponseWriter, r *http.Request) {
-	ready, rejected, err := c.taskQueue.Destroy()
-	fmt.Fprintf(w, "Ready %d, Rejected %d, Err %v", ready, rejected, err)
+	return controller
 }
 
 func writeJSONResponse(w http.ResponseWriter, code int, body interface{}) {
@@ -78,34 +60,14 @@ func writeErrResponse(w http.ResponseWriter, code int, message string) {
 	w.Write(b)
 }
 
-func (c *Controller) sendCommand(ctx context.Context, jobID uuid.UUID, command string) (string, error) {
-	receive := c.redisClient.Subscribe(ctx, transcoder.InfoChannel(jobID))
-	defer receive.Close()
-	err := c.redisClient.Publish(ctx, transcoder.CommandChannel(jobID), command).Err()
-	if err != nil {
-		return "", fmt.Errorf("%v to %v: %w", command, jobID, err)
-	}
-	msg, err := receive.ReceiveMessage(ctx)
-	if err != nil {
-		return "", fmt.Errorf("%v to %v: %w", command, jobID, err)
-	}
-	return msg.Payload, nil
-}
-
 func (c *Controller) sendToQueue(job *transcoder.Job) error {
-	err := c.db.Save(job).Error
-	if err != nil {
-		return fmt.Errorf("could not save job %w", err)
-	}
-	taskBytes, err := json.Marshal(job)
-	if err != nil {
-		return fmt.Errorf("could not marshal job %w", err)
-	}
-
-	err = c.taskQueue.PublishBytes(taskBytes)
-	if err != nil {
-		return fmt.Errorf("could not open publish queue %w", err)
-	}
-	log.Printf("Submitted %v", job.ID)
+	c.mutex.Lock()
+	c.jobs[job.ID] = job
+	c.mutex.Unlock()
+	c.jobChan <- job
+	go func() {
+		job.Wait()
+		log.Printf("%v err: %v", job.ID, job.Err())
+	}()
 	return nil
 }
