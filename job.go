@@ -40,6 +40,8 @@ type Job struct {
 	CommandOutput string    `json:"commandOutput" gorm:"type:text"`
 
 	mu   sync.RWMutex
+	done chan struct{}
+	err  error
 	info *info
 	cmd  *exec.Cmd
 }
@@ -58,9 +60,6 @@ func NewJob(preset *Preset, params JobParams) *Job {
 }
 
 type info struct {
-	done chan struct{}
-	err  error
-
 	CurrentTime   float64  `json:"currentTime"`
 	TotalDuration float64  `json:"totalDuration"`
 	Output        []string `json:"output"`
@@ -110,7 +109,7 @@ func (job *Job) Run() error {
 
 	stdReader, err := job.cmd.StdoutPipe()
 	if err != nil {
-		job.info.err = err
+		job.err = err
 		return err
 	}
 	scanner := bufio.NewScanner(stdReader)
@@ -118,7 +117,7 @@ func (job *Job) Run() error {
 
 	errReader, err := job.cmd.StderrPipe()
 	if err != nil {
-		job.info.err = err
+		job.err = err
 		return err
 	}
 	errScanner := bufio.NewScanner(errReader)
@@ -128,13 +127,13 @@ func (job *Job) Run() error {
 	err = job.cmd.Start()
 	job.mu.Unlock()
 	if err != nil {
-		job.info.err = err
+		job.err = err
 		return err
 	}
 
 	err = job.cmd.Wait()
 	if err != nil {
-		job.info.err = err
+		job.err = err
 		return err
 	}
 
@@ -148,8 +147,8 @@ func (job *Job) Reset() {
 	defer job.mu.Unlock()
 	job.Status = JobStatusSubmitted
 	job.CommandOutput = ""
-	if job.info != nil && job.info.done != nil {
-		close(job.info.done)
+	if job.done != nil {
+		close(job.done)
 	}
 	job.info = &info{}
 }
@@ -157,18 +156,18 @@ func (job *Job) Reset() {
 func setDone(job *Job) {
 	job.mu.Lock()
 	defer job.mu.Unlock()
-	if job.info != nil && job.info.done != nil {
-		close(job.info.done)
+	if job.done != nil {
+		close(job.done)
 	}
 }
 
 // Done - channel that blocks until process has finished
 func (job *Job) Done() <-chan struct{} {
 	job.mu.Lock()
-	if job.info.done == nil {
-		job.info.done = make(chan struct{})
+	if job.done == nil {
+		job.done = make(chan struct{})
 	}
-	d := job.info.done
+	d := job.done
 	job.mu.Unlock()
 	return d
 }
@@ -181,7 +180,7 @@ func (job *Job) Wait() {
 // Err - exec related errors. nil until process exits
 func (job *Job) Err() error {
 	job.mu.Lock()
-	err := job.info.err
+	err := job.err
 	job.mu.Unlock()
 	return err
 }
