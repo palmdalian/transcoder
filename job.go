@@ -104,7 +104,7 @@ func (job *Job) Run() error {
 	job.prepare()
 
 	defer func() {
-		close(job.info.done)
+		setDone(job)
 		job.CommandOutput = strings.Join(job.Output(), "\n")
 	}()
 
@@ -152,6 +152,14 @@ func (job *Job) Reset() {
 		close(job.info.done)
 	}
 	job.info = &info{}
+}
+
+func setDone(job *Job) {
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	if job.info != nil && job.info.done != nil {
+		close(job.info.done)
+	}
 }
 
 // Done - channel that blocks until process has finished

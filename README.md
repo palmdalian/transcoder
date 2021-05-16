@@ -1,5 +1,5 @@
 # transcoder
-Golang video transcode workers to run FFMPEG commands using os.Exec. Created with multiple server instances in mind.
+Golang video transcode workers to run FFMPEG commands using `os/exec`. Created with multiple server instances in mind.
 
 Optionally uses rmq (Redis message queue) as a distributed worker job queue:
 https://github.com/adjust/rmq
@@ -69,8 +69,10 @@ If you don't want to use an rmq.Queue, you can instead create your own worker po
 Example servers, workers, and cli in /cmd
 ### Standalone http server
 `cmd/server` Listen for incoming JobSubmission requests and submit them to the worker pool. Handles running, killing, and getting job status.
-### CLI
-`cmd/cli` Batch many ffmpeg jobs using a single Preset. flag args are used for JobParams input and output.
+### CLI with pool
+`cmd/cli` Serially run many jobs directly using a single Preset. flag args are used for JobParams input and output.
+### CLI with pool
+`cmd/cli_pool` Batch many ffmpeg jobs using a single Preset. flag args are used for JobParams input and output.
 ### Server with rmq.Queue and DB saves
 `cmd/rmq_server` Listen for incoming JobSubmission requests and add them to rmq.Queue to via queue.Director. Saves any JobStatus messages to the db
 ### Worker with rmq.Queue and DB saves

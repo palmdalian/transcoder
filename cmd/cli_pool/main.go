@@ -2,9 +2,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"path"
+	"sync"
 
 	"github.com/palmdalian/transcoder"
 )
@@ -36,30 +38,45 @@ func main() {
 		log.Fatalf("Output directory must be present")
 	}
 
+	jobQueue := make(chan *transcoder.Job, 100)
+	jobUpdatesChan := make(chan *transcoder.JobStatus, 100)
+	go printUpdates(jobUpdatesChan)
+	for i := 0; i < WorkerNum; i++ {
+		worker := transcoder.NewWorker(jobQueue, jobUpdatesChan)
+		worker.Name = fmt.Sprintf("Worker%d", i)
+	}
+
 	files, err := ioutil.ReadDir(input)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	wg := &sync.WaitGroup{}
 	for _, f := range files {
 		if f.IsDir() {
 			continue
 		}
-		err := runJob(path.Join(input, f.Name()), path.Join(output, f.Name()))
-		if err != nil {
-			log.Println(err)
-		}
+		wg.Add(1)
+		go submitJob(wg, jobQueue, path.Join(input, f.Name()), path.Join(output, f.Name()))
 	}
+	wg.Wait()
 }
 
-func runJob(input, output string) error {
+func submitJob(wg *sync.WaitGroup, jobQueue chan *transcoder.Job, input, output string) {
+	defer wg.Done()
 	params := map[string]string{
 		"input":  input,
 		"output": output,
 	}
 
 	job := transcoder.NewJob(preset, params)
-	log.Printf("Running %v %v : %v", job.ID, input, output)
-	err := job.Run()
-	return err
+	log.Printf("Submitting %v %v : %v", job.ID, input, output)
+	jobQueue <- job
+	job.Wait()
+}
+
+func printUpdates(jobUpdatesChan chan *transcoder.JobStatus) {
+	for update := range jobUpdatesChan {
+		log.Printf("%v %v Status: %s %s", update.Job.ID, update.Job.Params, update.Status, update.Message)
+	}
 }
