@@ -67,7 +67,7 @@ func (c *Controller) JobInfo(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithDeadline(r.Context(), time.Now().Add(time.Second*3))
 	defer cancel()
-	msg, err := c.sendCommand(ctx, jobID, transcoder.JobCmdStatus)
+	msg, err := c.director.JobInfo(ctx, jobID)
 	if err != nil {
 		writeErrResponse(w, http.StatusInternalServerError, fmt.Sprintf("sending command %v", err))
 		return
@@ -100,7 +100,7 @@ func (c *Controller) JobKill(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithDeadline(r.Context(), time.Now().Add(time.Second*3))
 	defer cancel()
-	msg, err := c.sendCommand(ctx, jobID, transcoder.JobCmdKill)
+	msg, err := c.director.KillJob(ctx, jobID)
 	if err != nil {
 		writeErrResponse(w, http.StatusInternalServerError, fmt.Sprintf("sending command %v", err))
 	}

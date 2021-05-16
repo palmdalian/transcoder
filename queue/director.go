@@ -117,6 +117,35 @@ func (director *Director) SendToQueue(job *transcoder.Job) error {
 	return nil
 }
 
+const (
+	jobCmdStatus = "status"
+	jobCmdKill   = "kill"
+)
+
+// KillJob - use pubsub to send kill command to attached director for running jobID
+func (director *Director) KillJob(ctx context.Context, jobID uuid.UUID) (string, error) {
+	return director.sendCommand(ctx, jobID, jobCmdKill)
+}
+
+// JobInfo - use pubsub to get job info from the director of the running jobID
+func (director *Director) JobInfo(ctx context.Context, jobID uuid.UUID) (string, error) {
+	return director.sendCommand(ctx, jobID, jobCmdStatus)
+}
+
+func (director *Director) sendCommand(ctx context.Context, jobID uuid.UUID, command string) (string, error) {
+	receive := director.redisClient.Subscribe(ctx, infoChannel(jobID))
+	defer receive.Close()
+	err := director.redisClient.Publish(ctx, commandChannel(jobID), command).Err()
+	if err != nil {
+		return "", fmt.Errorf("%v to %v: %w", command, jobID, err)
+	}
+	msg, err := receive.ReceiveMessage(ctx)
+	if err != nil {
+		return "", fmt.Errorf("%v to %v: %w", command, jobID, err)
+	}
+	return msg.Payload, nil
+}
+
 // PurgeReady remove any unAcked jobs before work is started
 func (director *Director) PurgeReady() (ready int64, err error) {
 	return director.taskQueue.PurgeReady()
@@ -129,7 +158,7 @@ func (director *Director) DestroyQueue() (ready, rejected int64, err error) {
 
 // commandReader Subscribe to a job-specific PubSub to relay commands from any pod
 func (director *Director) commandReader(ctx context.Context, job *transcoder.Job) {
-	commandSub := director.redisClient.Subscribe(ctx, CommandChannel(job.ID))
+	commandSub := director.redisClient.Subscribe(ctx, commandChannel(job.ID))
 	go func() {
 		<-ctx.Done()
 		if err := commandSub.Close(); err != nil {
@@ -141,12 +170,12 @@ func (director *Director) commandReader(ctx context.Context, job *transcoder.Job
 	channel := commandSub.Channel()
 	for message := range channel {
 		switch message.Payload {
-		case transcoder.JobCmdStatus:
-			send := director.redisClient.Publish(ctx, InfoChannel(job.ID), job.Info())
+		case jobCmdStatus:
+			send := director.redisClient.Publish(ctx, infoChannel(job.ID), job.Info())
 			if err := send.Err(); err != nil {
 				log.Println(err)
 			}
-		case transcoder.JobCmdKill:
+		case jobCmdKill:
 			stat := &transcoder.JobStatus{Status: "killed", Job: job}
 			log.Printf("Killing %v", job.ID)
 			if err := job.Kill(); err != nil {
@@ -158,7 +187,7 @@ func (director *Director) commandReader(ctx context.Context, job *transcoder.Job
 				log.Println(err)
 				return
 			}
-			send := director.redisClient.Publish(ctx, InfoChannel(job.ID), b)
+			send := director.redisClient.Publish(ctx, infoChannel(job.ID), b)
 			if err := send.Err(); err != nil {
 				log.Println(err)
 			}
@@ -168,13 +197,13 @@ func (director *Director) commandReader(ctx context.Context, job *transcoder.Job
 	}
 }
 
-// CommandChannel - Redis PubSub channel sending commands to a job
-func CommandChannel(jobID uuid.UUID) string {
+// commandChannel - Redis PubSub channel sending commands to a job
+func commandChannel(jobID uuid.UUID) string {
 	return fmt.Sprintf("cmd_%v", jobID)
 }
 
-// InfoChannel - Redis PubSub channel for receiving info from a job
-func InfoChannel(jobID uuid.UUID) string {
+// infoChannel - Redis PubSub channel for receiving info from a job
+func infoChannel(jobID uuid.UUID) string {
 	return fmt.Sprintf("info_%v", jobID)
 }
 

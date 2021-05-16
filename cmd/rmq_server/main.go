@@ -38,7 +38,7 @@ func main() {
 		log.Fatalf("Could not create director %v", err)
 	}
 
-	controller := controller.NewController(db, redisClient, director, jobUpdatesChan)
+	controller := controller.NewController(db, director, jobUpdatesChan)
 
 	r := mux.NewRouter()
 	r.HandleFunc("/preset-groups/{presetGroupID}/submit", controller.SubmitPresetGroupJob)

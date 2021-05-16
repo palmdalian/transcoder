@@ -18,9 +18,6 @@ import (
 )
 
 const (
-	JobCmdStatus = "status"
-	JobCmdKill   = "kill"
-
 	JobStatusSubmitted  = "submitted"
 	JobStatusInProgress = "inProgress"
 	JobStatusDone       = "done"

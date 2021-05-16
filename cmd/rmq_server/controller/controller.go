@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,22 +9,19 @@ import (
 	"github.com/palmdalian/transcoder"
 	"github.com/palmdalian/transcoder/queue"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type Controller struct {
 	db             *gorm.DB
-	redisClient    redis.UniversalClient
 	director       *queue.Director
 	jobUpdatesChan chan *transcoder.JobStatus
 }
 
-func NewController(db *gorm.DB, redisClient redis.UniversalClient, director *queue.Director, jobUpdatesChan chan *transcoder.JobStatus) *Controller {
+func NewController(db *gorm.DB, director *queue.Director, jobUpdatesChan chan *transcoder.JobStatus) *Controller {
 	controller := &Controller{
 		db:             db,
-		redisClient:    redisClient,
 		director:       director,
 		jobUpdatesChan: jobUpdatesChan,
 	}
@@ -88,20 +84,6 @@ func writeErrResponse(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(b)
-}
-
-func (c *Controller) sendCommand(ctx context.Context, jobID uuid.UUID, command string) (string, error) {
-	receive := c.redisClient.Subscribe(ctx, queue.InfoChannel(jobID))
-	defer receive.Close()
-	err := c.redisClient.Publish(ctx, queue.CommandChannel(jobID), command).Err()
-	if err != nil {
-		return "", fmt.Errorf("%v to %v: %w", command, jobID, err)
-	}
-	msg, err := receive.ReceiveMessage(ctx)
-	if err != nil {
-		return "", fmt.Errorf("%v to %v: %w", command, jobID, err)
-	}
-	return msg.Payload, nil
 }
 
 func (c *Controller) sendToQueue(job *transcoder.Job) error {
