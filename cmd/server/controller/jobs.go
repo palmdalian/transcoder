@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -31,7 +32,7 @@ func (c *Controller) GetJobs(w http.ResponseWriter, r *http.Request) {
 		states = []string{transcoder.JobStatusSubmitted, transcoder.JobStatusInProgress}
 	}
 
-	jobs := c.getJobs()
+	jobs := c.getJobs(states)
 	writeJSONResponse(w, http.StatusOK, jobs)
 }
 
@@ -118,13 +119,22 @@ func (c *Controller) getJob(jobID uuid.UUID) (*transcoder.Job, bool) {
 	return job, ok
 }
 
-func (c *Controller) getJobs() []*transcoder.Job {
+func (c *Controller) getJobs(states []string) []*transcoder.Job {
+	stateMap := make(map[string]bool, len(states))
+	for _, s := range states {
+		stateMap[s] = true
+	}
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	jobs := make([]*transcoder.Job, 0, len(c.jobs))
 	for _, job := range c.jobs {
+		if _, ok := stateMap[job.Status]; !ok {
+			continue
+		}
 		jobs = append(jobs, job)
 	}
+	sort.Slice(jobs, func(i, j int) bool { return jobs[i].CreatedAt.Before(jobs[j].CreatedAt) })
 	return jobs
 }

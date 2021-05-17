@@ -277,7 +277,7 @@ func (job *Job) setCurrentTime(current float64) {
 	job.info.CurrentTime = current
 }
 
-// Info - return all collected info from exec.Cmd process
+// InfoString - return json string of all collected info from exec.Cmd process
 func (job *Job) Info() string {
 	job.mu.RLock()
 	defer job.mu.RUnlock()

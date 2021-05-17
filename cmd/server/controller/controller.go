@@ -29,6 +29,14 @@ func NewController(jobChan chan *transcoder.Job, jobUpdatesChan chan *transcoder
 	return controller
 }
 
+func writeHTMLResponse(w http.ResponseWriter, code int, body string) {
+	w.Header().Set("Content-Type", "text/html")
+	if code != http.StatusOK {
+		w.WriteHeader(code)
+	}
+	w.Write([]byte(body))
+}
+
 func writeJSONResponse(w http.ResponseWriter, code int, body interface{}) {
 	resp, err := json.Marshal(body)
 	if err != nil {
